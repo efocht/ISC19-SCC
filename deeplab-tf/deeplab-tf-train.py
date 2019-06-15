@@ -1,6 +1,6 @@
 # VE FORMAT
 ve_data_format = 'NCHW'
-ve_axis = 3
+ve_axis = 1
 ve_pixels = [2, 3]
 # VE FORMAT
 
@@ -243,15 +243,12 @@ def main(device, input_path_train, input_path_validation, downsampling_fact, dow
                                           batch_norm_decay=None,
                                           data_format=ve_data_format)
 
-        flogit, fprediction = model(next_elem[0], True, dtype)
+        logit, prediction = model(next_elem[0], True, dtype)
 
-        # convert everything below this again to channels_last fmt
-        logit = tf.transpose(flogit, [0, 2, 3, 1])
-        print("flogit shape = %r" % flogit.shape.as_list())
+        # output comes in channels_last fmt
         print("logit shape = %r" % logit.shape.as_list())
-        prediction = tf.transpose(fprediction, [0, 2, 3, 1])
-        print("fprediction shape = %r" % fprediction.shape.as_list())
         print("prediction shape = %r" % prediction.shape.as_list())
+        print("next_elem[1] shape = %r" % next_elem[1].shape.as_list())
 
         # set up loss
         loss = None
@@ -324,10 +321,10 @@ def main(device, input_path_train, input_path_validation, downsampling_fact, dow
                 optimizer, loss, global_step, num_steps_per_epoch, horovod)
 
         # set up streaming metrics
-        print ("shape of labels: %r, shape of predictions: %r" % (next_elem[1].shape.as_list(),
-                                                                  tf.argmax(prediction, axis=3).shape.as_list()))
-        iou_op, iou_update_op = tf.metrics.mean_iou(labels=next_elem[1],
-                                                    predictions=tf.argmax(prediction, axis=3),
+        pred_amax = tf.argmax(prediction, axis=3, name="prediction_argmax")
+        pred_flat = tf.reshape(pred_amax, [-1], name="iou_reshape_1")
+        iou_op, iou_update_op = tf.metrics.mean_iou(labels=tf.reshape(next_elem[1], [-1], name="iou_reshape_2"),
+                                                    predictions=pred_flat,
                                                     num_classes=3,
                                                     weights=None,
                                                     metrics_collections=None,

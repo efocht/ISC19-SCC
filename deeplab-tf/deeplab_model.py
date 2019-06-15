@@ -1,7 +1,7 @@
 # VE FORMAT
 ve_data_format = 'NCHW'
 ve_chan_format = 'channels_first'
-ve_axis = 3
+ve_axis = 1
 ve_pixels = [2, 3]
 # VE FORMAT
 
@@ -48,14 +48,17 @@ def atrous_spatial_pyramid_pooling(inputs, output_stride, batch_norm_decay, is_t
             with arg_scope([layers.batch_norm], is_training=is_training):
                 # (a) one 1x1 convolution and three 3x3 convolutions with rates = (6, 12, 18) when output stride = 16.
                 # the rates are doubled when output stride = 8.
-                conv_1x1 = layers_lib.conv2d(
-                    inputs, depth, [1, 1], stride=1, scope="conv_1x1", data_format=ve_data_format)
+                conv_1x1 = layers_lib.conv2d(inputs, depth, [1, 1], stride=1, scope="conv_1x1", data_format=ve_data_format)
+                print("conv_1x1 shape %r" % conv_1x1.shape.as_list())
                 conv_3x3_1 = layers_lib.conv2d(inputs, depth, [3, 3], stride=1, rate=atrous_rates[0],
                                                scope='conv_3x3_1', data_format=ve_data_format)
+                print("conv_3x3_1 shape %r" % conv_3x3_1.shape.as_list())
                 conv_3x3_2 = layers_lib.conv2d(inputs, depth, [3, 3], stride=1, rate=atrous_rates[1],
                                                scope='conv_3x3_2', data_format=ve_data_format)
+                print("conv_3x3_2 shape %r" % conv_3x3_2.shape.as_list())
                 conv_3x3_3 = layers_lib.conv2d(inputs, depth, [3, 3], stride=1, rate=atrous_rates[2],
                                                scope='conv_3x3_3', data_format=ve_data_format)
+                print("conv_3x3_3 shape %r" % conv_3x3_3.shape.as_list())
 
                 # (b) the image-level features
                 with tf.variable_scope("image_level_features"):
@@ -66,6 +69,7 @@ def atrous_spatial_pyramid_pooling(inputs, output_stride, batch_norm_decay, is_t
                     # 1x1 convolution with 256 filters( and batch normalization)
                     image_level_features = layers_lib.conv2d(image_level_features, depth, [1, 1],
                                                              stride=1, scope='conv_1x1', data_format=ve_data_format)
+                    print("image_level_features after conv2d shape %r" % image_level_features.shape.as_list())
                     # bilinearly upsample features
                     image_level_features = ensure_type(
                         image_level_features, tf.float32)
@@ -73,15 +77,19 @@ def atrous_spatial_pyramid_pooling(inputs, output_stride, batch_norm_decay, is_t
                         image_level_features, [0, 2, 3, 1])  # NCHW --> NHWC
                     image_level_features = tf.image.resize_bilinear(
                         image_level_features, inputs_size, name='upsample')
+                    print("image_level_features after bilinear shape %r" % image_level_features.shape.as_list())
                     image_level_features = tf.transpose(
                         image_level_features, [0, 3, 1, 2])  # NHWC --> NCHW
+                    print("image_level_features after transpose shape %r" % image_level_features.shape.as_list())
                     image_level_features = ensure_type(
                         image_level_features, inputs.dtype)
 
                 net = tf.concat([conv_1x1, conv_3x3_1, conv_3x3_2, conv_3x3_3,
                                  image_level_features], axis=ve_axis, name='concat')
+                print("atrous net after concat shape %r" % net.shape.as_list())
                 net = layers_lib.conv2d(
                     net, depth, [1, 1], stride=1, scope='conv_1x1_concat', data_format=ve_data_format)
+                print("atrous net after conv2d shape %r" % net.shape.as_list())
     return net
 
 
@@ -181,29 +189,39 @@ def deeplab_v3_plus_generator(num_classes,
                                                         '/block1/unit_3/bottleneck_v2/conv1']
                         #low_level_features_size = tf.shape(low_level_features)[1:3]
                         low_level_features_size = tf.shape(low_level_features)[2:4]
-                        # low_level_features = layers_lib.conv2d(low_level_features, 48, [1, 1],
-                        #                                       stride=1, scope='conv_1x1', data_format=ve_data_format)
-                        low_level_features = layers_lib.conv2d(
-                            low_level_features, 256, [1, 1], stride=1, scope='conv_1x1', data_format=ve_data_format)
+                        low_level_features = layers_lib.conv2d(low_level_features, 48, [1, 1],
+                                                               stride=1, scope='conv_1x1', data_format=ve_data_format)
+                        #low_level_features = layers_lib.conv2d(
+                        #    low_level_features, 256, [1, 1], stride=1, scope='conv_1x1', data_format=ve_data_format)
 
                     with tf.variable_scope("upsampling_logits"):
                         if decoder == 'bilinear':
                             encoder_output = ensure_type(encoder_output, tf.float32)
+                            print("encoder_output shape %r" % encoder_output.shape.as_list())
                             net = tf.transpose(encoder_output, [0, 2, 3, 1])  # NCHW --> NHWC
+                            print("net shape before bilinear %r" % net.shape.as_list())
                             net = tf.image.resize_bilinear(net, low_level_features_size, name='upsample_1')
+                            print("net shape after bilinear %r" % net.shape.as_list())
                             net = tf.transpose(net, [0, 3, 1, 2])  # NHWC --> NCHW
                             net = ensure_type(net, low_level_features.dtype)
+                            print("net shape before concat %r" % net.shape.as_list())
+                            print("low_level_features shape before concat %r" % low_level_features.shape.as_list())
                             net = tf.concat([net, low_level_features], axis=ve_axis, name='concat')
+                            print("net shape before 1st conv2d %r" % net.shape.as_list())
                             net = layers_lib.conv2d(
                                 net, 256, [3, 3], stride=1, scope='conv_3x3_1', data_format=ve_data_format)
+                            print("net shape after 1st conv2d %r" % net.shape.as_list())
                             net = layers_lib.conv2d(
                                 net, 256, [3, 3], stride=1, scope='conv_3x3_2', data_format=ve_data_format)
+                            print("net shape after 2nd conv2d %r" % net.shape.as_list())
                             net = layers_lib.conv2d(net, num_classes, [1, 1], activation_fn=None,
                                                     normalizer_fn=None, scope='conv_1x1', data_format=ve_data_format)
                             net = ensure_type(net, tf.float32)
+                            print("net shape after 3rd conv2d %r" % net.shape.as_list())
                             net = tf.transpose(net, [0, 2, 3, 1])  # NCHW --> NHWC
-                            net = tf.image.resize_bilinear(net, inputs_size, name='upsample_2')
-                            logits = tf.transpose(net, [0, 3, 1, 2])  # NHWC --> NCHW
+                            logits = tf.image.resize_bilinear(net, inputs_size, name='upsample_2')
+                            print("logits shape after bilinear %r" % logits.shape.as_list())
+                            #logits = tf.transpose(net, [0, 3, 1, 2])  # NHWC --> NCHW
                             logits = ensure_type(logits, low_level_features.dtype)
                         elif decoder.startswith('deconv'):
                             assert 8 * encoder_output.shape.as_list()[2] == inputs.shape.as_list()[2]
@@ -255,15 +273,19 @@ def deeplab_v3_plus_generator(num_classes,
 
                             logits = layers_lib.conv2d(net, num_classes, [1, 1], activation_fn=None,
                                                        normalizer_fn=None, scope='conv_1x1', data_format=ve_data_format)
+                            logits = tf.transpose(logits, [0, 2, 3, 1])  # NCHW --> NHWC
                         else:
                             print('ERROR: unknown decoder type:', decoder)
                             assert False
                         lshape = tf.shape(logits)
-                        rlogits = tf.transpose(logits, [1, 0, 2, 3])
-                        rlogits = tf.reshape(rlogits, [lshape[1], lshape[0]*lshape[2]*lshape[3]])
-                        rlogits = tf.nn.softmax(rlogits, axis=0)
-                        sm_logits = tf.reshape(rlogits, [lshape[1], lshape[0], lshape[2], lshape[3]])
-                        sm_logits = tf.transpose(sm_logits, [1, 0, 2, 3])
+                        print("lshape = %r" % lshape)                          
+                        rlogits = tf.reshape(logits, [lshape[0]*lshape[1]*lshape[2], lshape[3]], name="logits_reshape")
+                        sm_logits = tf.nn.softmax(rlogits, axis=-1)
+                        sm_logits = tf.reshape(sm_logits, [lshape[0], lshape[1], lshape[2], lshape[3]], name="sm_logits_reshape")
+                        print("logits shape = %r" % logits.shape.as_list())
+                        print("sm_logits shape = %r" % sm_logits.shape.as_list())
+                        #import pdb
+                        #pdb.set_trace()
 
         return logits, sm_logits
 
