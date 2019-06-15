@@ -11,7 +11,7 @@ export LD_PRELOAD=/usr/lib64/libhwloc.so.5
 export OMP_NUM_THREADS=2
 
 horovodrun --verbose -np 6 -H localhost:6 python \
-    ISC19-SCC/deeplab-tf/deeplab-tf-train.py \
+    deeplab-tf/deeplab-tf-train.py \
     --datadir_train ${data_dir_train} \
     --datadir_validation ${data_dir_validation} \
     --batch 1 \
